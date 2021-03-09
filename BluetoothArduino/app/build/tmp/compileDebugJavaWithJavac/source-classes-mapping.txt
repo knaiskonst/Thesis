@@ -1,9 +1,0 @@
-com/example/bluetootharduino/Ardconn.java
- com.example.bluetootharduino.Ardconn
- com.example.bluetootharduino.Ardconn$1
-com/example/bluetootharduino/MainActivity.java
- com.example.bluetootharduino.MainActivity
-com/example/bluetootharduino/BuildConfig.java
- com.example.bluetootharduino.BuildConfig
-com/example/bluetootharduino/ConnectedThread.java
- com.example.bluetootharduino.ConnectedThread
