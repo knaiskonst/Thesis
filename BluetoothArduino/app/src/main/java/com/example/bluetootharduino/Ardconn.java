@@ -42,7 +42,12 @@ import java.util.ArrayList;
 import java.util.UUID;
 
 import static android.os.SystemClock.elapsedRealtime;
-
+/*
+ * Konstantinos Knais 8967
+ * Android application used in my thesis - 7 lead holter monitor
+ * To be used along with the designed holter monitor
+ * Creates connection to arduino and shows incomming data with mpandroidchart
+ * */
 //Initialize Bluetooth and make a connection
 public class Ardconn extends AppCompatActivity {
     public final static String MODULE_MAC = "98:D3:31:FD:78:D9";//Change mac address if different arduino

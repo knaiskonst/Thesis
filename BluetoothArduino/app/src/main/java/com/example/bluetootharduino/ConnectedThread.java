@@ -10,7 +10,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import android.os.Handler;
-
+/*
+ * Konstantinos Knais 8967
+ * Android application used in my thesis - 7 lead holter monitor
+ * To be used along with the designed holter monitor
+ * Manages incoming and outcomming data to arduino
+ * */
 public class ConnectedThread extends Thread {
     private final BluetoothSocket mmSocket;
     private final InputStream mmInStream;
