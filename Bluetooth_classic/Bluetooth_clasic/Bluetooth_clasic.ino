@@ -42,6 +42,10 @@ String fileName;
 int num=0;
 unsigned long currentMillis=0;
 String values;
+
+long mesurements;
+long res;
+
 void setup() {
   // Open serial communications and wait for port to open:
   Serial.begin(9600);
@@ -58,15 +62,21 @@ void setup() {
 
 void loop() { // run over and over
   //Take measurements
+  mesurements = micros(); 
+  
   sendTime=millis();
   input1 = highPassFilter.input(analogRead(analogPin1))*5/1023; // read the input pin1  lowPassFilter.input(highPassFilter.input(
   input2 = highPassFilter.input(analogRead(analogPin2))*5/1023; // read the input pin2
   input3 = highPassFilter.input(analogRead(analogPin3))*5/1023; // read the input pin3
+  //1200us
+  
   values = String(input1);
   values+= ", ";
   values+= String(input2);
   values+= ", ";
   values+= String(input3);
+  //300us
+  
   if(mySerial){//Receive commands from phone
       flag=mySerial.read();    
       if(flag==49){//Ascii code 49 = number 1
@@ -91,14 +101,21 @@ void loop() { // run over and over
         mySerial.println("Starting...");
        }
   }
-
+  
   if(startFlag){// If start flag = 1 sd card is inserted and its safe to start writing
     //SD write start
-    mySerial.println(values);
+      
+    mySerial.write(input1); 
+    //mySerial.write(", ");
+    mySerial.write(input2);
+    //mySerial.write(", ");
+    mySerial.write(input3);
+    mySerial.write("\n");//8500us
+  
     values+=", ";
     values+=sendTime;
-    myFile.println(values);
-  
+    myFile.println(values); //200
+   
     //Bluetooth Start
     if((sendTime - currentMillis)>60000){//1 minuite has passed
       currentMillis=millis();
@@ -109,6 +126,9 @@ void loop() { // run over and over
       mySerial.println(fileName);
     }
   }
+  res=micros()-mesurements;
+    Serial.print("Measurements: ");
+    Serial.println(res);  
 }
 
 
