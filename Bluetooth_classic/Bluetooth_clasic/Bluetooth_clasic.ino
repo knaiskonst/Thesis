@@ -22,16 +22,15 @@ SoftwareSerial mySerial(8, 9); // RX, TX
 int flag=0;
 int startFlag=0;
 
-float input1=0;
-float input2=0;
-float input3=0;
+int input1=0;
+int input2=0;
+int input3=0;
 long sendTime=0;
 float batteryLvl=0;
 const int analogPin1 = A1; 
 const int analogPin2 = A2;
 const int analogPin3 = A3;
 const int batteryPin = A5;  
-int i=0;
 
 
 float LowFrequency = 0.5;
@@ -40,6 +39,8 @@ FilterOnePole highPassFilter(HIGHPASS,LowFrequency);
 File myFile;//SD card file
 String fileName;
 int num=0;
+int i=0;
+int j=0;
 unsigned long currentMillis=0;
 String values;
 
@@ -62,12 +63,13 @@ void setup() {
 
 void loop() { // run over and over
   //Take measurements
-  mesurements = micros(); 
+  //mesurements = micros(); 
   
   sendTime=millis();
-  input1 = highPassFilter.input(analogRead(analogPin1))*5/1023; // read the input pin1  lowPassFilter.input(highPassFilter.input(
-  input2 = highPassFilter.input(analogRead(analogPin2))*5/1023; // read the input pin2
-  input3 = highPassFilter.input(analogRead(analogPin3))*5/1023; // read the input pin3
+  input1 = highPassFilter.input(analogRead(analogPin1)); // read the input pin1  lowPassFilter.input(highPassFilter.input(
+  input2 = highPassFilter.input(analogRead(analogPin2)); // read the input pin2
+  input3 = highPassFilter.input(analogRead(analogPin3)); // read the input pin3
+  Serial.println(input1);
   //1200us
   
   values = String(input1);
@@ -109,13 +111,20 @@ void loop() { // run over and over
     //mySerial.write(", ");
     mySerial.write(input2);
     //mySerial.write(", ");
-    mySerial.write(input3);
-    mySerial.write("\n");//8500us
+    mySerial.write(input3); //8500us
+    mySerial.write("\n");
+
   
     values+=", ";
     values+=sendTime;
     myFile.println(values); //200
-   
+    i++;
+    if(i==1000){
+      i=0;
+      myFile.flush(); //5ms
+    }
+    
+
     //Bluetooth Start
     if((sendTime - currentMillis)>60000){//1 minuite has passed
       currentMillis=millis();
@@ -126,9 +135,9 @@ void loop() { // run over and over
       mySerial.println(fileName);
     }
   }
-  res=micros()-mesurements;
-    Serial.print("Measurements: ");
-    Serial.println(res);  
+  //res=micros()-mesurements;
+  //Serial.print("Measurements: ");
+  //Serial.println(res);  
 }
 
 
