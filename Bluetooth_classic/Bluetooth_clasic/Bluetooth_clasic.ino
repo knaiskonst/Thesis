@@ -17,37 +17,6 @@
 #include <SoftwareSerial.h>
 //------------------------------
 
-//Struct to put 
-//customize this to whatever variable types and names you need
-typedef struct measure_struct{
-  byte start;
-  byte MSB1;
-  byte LSB1;
-  byte MSB2;
-  byte LSB2;
-  byte MSB3;
-  byte LSB3;
-};
-
-
-//the packet size will be the number of bytes (1byte = 8bits) of all the variables we defined in the structure above
-//in our case it's: 4 bytes (the first 4 variables in the struct) + 2 bytes (the uint16_t is 2*8 bytes) + 4bytes (the float) + 1 byte (the last variable)
-const int union_size = sizeof(measure_struct);
-
-/* Now we define a union, basically the ways we want to write or read this data
- * in our case we want one way to be the structure above
- * and another way to be a byte array of appropriate size.
- * I named this 'btPacket_t' because I use it for bluetooth, name it whatever you want.
- * You can define as many types inside as you need, just make sure the types you define are all the same size in bytes
- */
-typedef union btPacket_t{
- measure_struct structure;
- byte byteArray[union_size]; /* you can use other variable types if you want. Like: a 32bit integer if you have 4 8bit variables in your struct */
-};
-
-//create a variable using this new union we defined
-btPacket_t measurements;  
-
 SoftwareSerial mySerial(8, 9); // RX, TX
 
 int flag=0;
@@ -64,6 +33,7 @@ const int analogPin2 = A2;
 const int analogPin3 = A3;
 const int batteryPin = A5;  
 
+byte measurementsArray[9];
 
 float LowFrequency = 0.5;
 FilterOnePole highPassFilter(HIGHPASS,LowFrequency);
@@ -78,7 +48,8 @@ String values;
 
 long start;
 long res;
-
+long dif=0;
+long tic=0;
 int maxValue=0;
 
 void setup() {
@@ -98,16 +69,11 @@ void setup() {
 void loop() { // run over and over
   //Take measurements
   //mesurements = micros(); 
-  start=micros();
   sendTime=millis();
-  input1 = highPassFilter.input(analogRead(analogPin1)); // read the input pin1  lowPassFilter.input(highPassFilter.input(
+  input1 = highPassFilter.input(analogRead(analogPin1)); // read the input pin1 
   input2 = highPassFilter.input(analogRead(analogPin2)); // read the input pin2
   input3 = highPassFilter.input(analogRead(analogPin3)); // read the input pin3
   //1120us -> 1.12ms
-  if(maxValue<abs(input1)){
-      maxValue=abs(input1);
-      Serial.println(maxValue);
-  }
   
   if(mySerial){//Receive commands from phone
       flag=mySerial.read();    
@@ -133,10 +99,15 @@ void loop() { // run over and over
         mySerial.println("Starting...");
        }
   }
-  startFlag=1;
+  
   if(startFlag){// If start flag = 1 sd card is inserted and its safe to start writing
+
+    dif = micros()-tic;
+    tic = micros();
+    Serial.println(dif);
+      sendBlue(2,input1,input2,input3,dif);//7450us ->7.45ms
     
-    sendBlue(2,input1,input2,input3);//7450us ->7.45ms
+    //start=micros();
 
     values = String(input1);
     values+= ", ";
@@ -146,41 +117,31 @@ void loop() { // run over and over
     values+=", ";
     values+=sendTime;
     myFile.println(values); //450us normal -> 3900us if flush
-   
+    
     i++;
     if(i==1000){
-
       i=0;
       myFile.flush(); //5ms
-
-    }
-    
-
-    //Bluetooth Start
-    if((sendTime - currentMillis)>60000){//1 minuite has passed
-      currentMillis=millis();
-      batteryLvl = analogRead(batteryPin);
-      //Serial.println(batteryLvl);
-
-      sendBlue(3,batteryLvl,num,0);
-
-
     }
   }
   //Tottal time: 3500us->3.5ms -> 285.71Hz
-  res=micros()-start;
+  //Serial.println(res);
 }
 
-void sendBlue(int what, int x, int y, int z){
-    measurements.byteArray[0] = what;    //3-Battery lvl 2-Measurements
-    measurements.byteArray[1] =  x >> 8;//MSB x
-    measurements.byteArray[2] =  x;     //LSB x
-    measurements.byteArray[3] =  y >> 8;//MSB y
-    measurements.byteArray[4] =  y;     //LSB y
-    measurements.byteArray[5] =  z >> 8;//MSB z
-    measurements.byteArray[6] =  z;     //LSB z
-    mySerial.write(measurements.byteArray, union_size);
+void sendBlue(int what, int x, int y, int z, long t){
+    measurementsArray[0] = what;    //3-Battery lvl 2-Measurements
+    measurementsArray[1] =  x >> 8;//MSB x
+    measurementsArray[2] =  x;     //LSB x
+    measurementsArray[3] =  y >> 8;//MSB y
+    measurementsArray[4] =  y;     //LSB y
+    measurementsArray[5] =  z >> 8;//MSB z
+    measurementsArray[6] =  z;     //LSB z
+    measurementsArray[7] =  t >> 8;//MSB z
+    measurementsArray[8] =  t;     //LSB z
+    mySerial.write(measurementsArray, sizeof(measurementsArray));
 }
+
+
 bool setupSD(){
 //Setup SD start
   if(SD.begin()) {  
@@ -189,9 +150,6 @@ bool setupSD(){
     fileName += ".txt";
     num++;
     myFile = SD.open(fileName, FILE_WRITE);
-    mySerial.println(fileName);
-    batteryLvl = analogRead(batteryPin);
-    sendBlue(3,batteryLvl,num,0);
     // if the file opened okay, write to it:
     if (myFile) {
       myFile.println("ECG1, ECG2, ECG3, Time");
