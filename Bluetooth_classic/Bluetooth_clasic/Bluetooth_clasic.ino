@@ -71,6 +71,7 @@ void loop() { // run over and over
   //mesurements = micros(); 
   sendTime=millis();
   input1 = highPassFilter.input(analogRead(analogPin1)); // read the input pin1 
+  Serial.println(input1);
   input2 = highPassFilter.input(analogRead(analogPin2)); // read the input pin2
   input3 = highPassFilter.input(analogRead(analogPin3)); // read the input pin3
   //1120us -> 1.12ms
@@ -101,11 +102,16 @@ void loop() { // run over and over
   }
   
   if(startFlag){// If start flag = 1 sd card is inserted and its safe to start writing
+    //j++;
 
-    dif = micros()-tic;
-    tic = micros();
-    Serial.println(dif);
+    //if(j==5){
+      dif = micros()-tic;
+      tic = micros();
       sendBlue(2,input1,input2,input3,dif);//7450us ->7.45ms
+      //j=0;
+    //}
+
+
     
     //start=micros();
 
@@ -119,7 +125,7 @@ void loop() { // run over and over
     myFile.println(values); //450us normal -> 3900us if flush
     
     i++;
-    if(i==1000){
+    if(i==10000){
       i=0;
       myFile.flush(); //5ms
     }
