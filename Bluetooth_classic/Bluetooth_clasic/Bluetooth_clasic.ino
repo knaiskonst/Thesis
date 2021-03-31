@@ -50,7 +50,6 @@ long start;
 long res;
 long dif=0;
 long tic=0;
-int maxValue=0;
 
 void setup() {
   // Open serial communications and wait for port to open:
@@ -59,8 +58,10 @@ void setup() {
   // set the data rate for the SoftwareSerial port
   mySerial.begin(38400);
 
-  if(setupSD()){
-  }else{
+  //Make sure sd card is inserted
+  while(!setupSD()){
+    sendBlue(4,4,4,4,4); //mySerial.println("Insert SD Card");
+    delay(2000);
   }
   analogReference(DEFAULT);
   
@@ -70,9 +71,10 @@ void loop() { // run over and over
   //Take measurements
   //start = micros(); 
   sendTime=millis();
-  input1 = highPassFilter.input(analogRead(analogPin1)); // read the input pin1 
+  input1 = highPassFilter.input(analogRead(analogPin3)); // read the input pin1 
+  //I wired the input in reverse. 
   input2 = highPassFilter.input(analogRead(analogPin2)); // read the input pin2
-  input3 = highPassFilter.input(analogRead(analogPin3)); // read the input pin3
+  input3 = highPassFilter.input(analogRead(analogPin1)); // read the input pin3
   //1120us -> 1.12ms
   
   if(mySerial){//Receive commands from phone
@@ -80,43 +82,34 @@ void loop() { // run over and over
       if(flag==49){//Ascii code 49 = number 1
         //Stop recording
         startFlag=0;
-        mySerial.println("Please wait, saving");
-        
         myFile.flush(); //5ms
         myFile.close();
-        
-        mySerial.println("Saved, you can eject the SD card");
+        sendBlue(3,3,3,3,3); //mySerial.println("Saved, you can eject the SD card");
+
       }
-      if(flag == 50){
+      if(flag == 50 && startFlag==0){
         //Start recording
         startFlag=1;
         //Make sure sd card is inserted
         while(!setupSD()){
-          mySerial.println("Insert SD Card");
+          sendBlue(4,4,4,4,4); //mySerial.println("Insert SD Card");
           delay(2000);
         }
         //SetupSD initializes SD card if true
-        mySerial.println("Starting...");
        }
   }
   
   if(startFlag){// If start flag = 1 sd card is inserted and its safe to start writing
-    //j++;
-    //if(j==3){
-    //  j=0;
+
       dif = micros()-tic;
       tic = micros();
       sendBlue(2,input1,input2,input3,dif);//7450us ->7.45ms
-    //}
 
-    
-    //start=micros();
-
-    values = String(input1);
+    values = input1*5/1023.0;
     values+= ", ";
-    values+= String(input2);
+    values+= input2*5/1023.0;
     values+= ", ";
-    values+= String(input3);
+    values+= input3*5/1023.0;
     values+=", ";
     values+=sendTime;
     myFile.println(values); //450us normal -> 3900us if flush
@@ -126,12 +119,18 @@ void loop() { // run over and over
       i=0;
       myFile.flush(); //5ms
     }
+    if((sendTime-currentMillis)>60000){//1 minuite
+        currentMillis=millis();
+        if((analogRead(batteryPin)*5/1023)<3){
+          sendBlue(5,5,5,5,5);
+        }
+    }
   }
   //Tottal time: 3500us->3.5ms -> 285.71Hz
 }
 
 void sendBlue(int what, int x, int y, int z, long t){
-    measurementsArray[0] = what;    //3-Battery lvl 2-Measurements
+    measurementsArray[0] = what;    //2- Measurements, 3 - Eject sd card, 4 - Insert SD, 5 - Low battery 
     measurementsArray[1] =  x >> 8;//MSB x
     measurementsArray[2] =  x;     //LSB x
     measurementsArray[3] =  y >> 8;//MSB y
