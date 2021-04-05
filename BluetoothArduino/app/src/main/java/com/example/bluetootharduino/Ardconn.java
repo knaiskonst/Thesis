@@ -68,8 +68,11 @@ public class Ardconn extends AppCompatActivity {
     ArrayList<Entry> valuesECG1 = new ArrayList<>();
     long time_ecg;
     long start;
+    float[] lastVal = new float[3];
     ArrayList<Entry> valuesECG2 = new ArrayList<>();
     ArrayList<Entry> valuesECG3 = new ArrayList<>();
+    //int max_measurments = 80;//
+    float[][] values = new float[4][ConnectedThread.max_measurments];
     int showChart=1;
     boolean scrolling = true;
     long sum;
@@ -81,12 +84,11 @@ public class Ardconn extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState){
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        batteryLvl= findViewById(R.id.progressBar); // initiate the progress bar
-        batteryLvl.setMax(100);
 
         Log.i("[BLUETOOTH]", "Creating listeners");
 //        response = (TextView)findViewById(R.id.textView);
 //        response.setMovementMethod(new ScrollingMovementMethod());
+
         bta = BluetoothAdapter.getDefaultAdapter();
         //If bluetooth is not enabled create intent for user to turn it on
         if(!bta.isEnabled()){
@@ -97,7 +99,7 @@ public class Ardconn extends AppCompatActivity {
 
         chart=findViewById(R.id.chart);
         setupChart(chart, Color.rgb(255,255,255));
-        start = System.currentTimeMillis();
+        //start = System.currentTimeMillis();
 
     }
     @Override
@@ -169,13 +171,13 @@ public class Ardconn extends AppCompatActivity {
         Log.d("[Ardconn]","initiateBluetoothProcess");
         if(bta.isEnabled()){
             //Attempt to connect to bluetooth module
-            BluetoothSocket tmp;
+            final BluetoothSocket[] tmp = new BluetoothSocket[1];
             mmDevice = bta.getRemoteDevice(MODULE_MAC);
             toastMessage("Searching...");
             //Create socket
             try {
-                tmp=mmDevice.createInsecureRfcommSocketToServiceRecord(MY_UUID);
-                mmSocket=tmp;
+                tmp[0] =mmDevice.createInsecureRfcommSocketToServiceRecord(MY_UUID);
+                mmSocket= tmp[0];
                 mmSocket.connect();
                 Log.i("[BLUETOOTH]","Connected to: "+mmDevice.getName());
                 toastMessage("Connected to: "+mmDevice.getName());
@@ -194,27 +196,35 @@ public class Ardconn extends AppCompatActivity {
                     //super.handleMessage(msg);
                     if(msg.what == ConnectedThread.RESPONSE_MESSAGE){
                         //Get message from connected thread
-                        String txt = (String)msg.obj;
-                        //Log.d("[Ardconn]","txt: "+txt+" length: "+txt.length());
-
-                        if(txt.startsWith("Voltage")){
-                            //Should show somehow the voltage
-                            int voltagePer =(int) (((getVoltage(txt)-3)/2)*100);
-                            Log.d("[Ardconn]", "voltagePer: "+voltagePer);
-                            if(voltagePer>0){
-                                batteryLvl.setProgress(voltagePer); // 50 default progress value for the progress bar
-                            }
-                        }else if(txt.startsWith("ECG")) {
-                            Log.d("[Ardconn]", "txt: " + txt + " length: " + txt.length());
-                            getSupportActionBar().setTitle(txt);
-                        }else if(txt.matches("[a-zA-Z, /,.?]+")){
-                                toastMessage(txt);
-                        }else if( txt.matches("[0-9, /,.-]+") && txt.length()<20 && txt.length()>15) {
-                            float[] valuesFloat = seperateData(txt);
-                            if (valuesFloat.length == 3) {
-                                previewData(valuesFloat);
+                        short[] txt = (short[]) msg.obj;
+                        //Log.d("[Ardconn]","txt.length: "+txt.length);
+                        //Seperate to each 1,2,3 ecg
+                        //Log.d("[Ardconn]","txt.length: "+txt.length);
+                        for(int i=0;i<txt.length;i=i+4){
+                            int j = i/4;
+                            //Log.d("[THREAD-CT]","i: "+i+" j: "+j);
+                            values[0][j] = (float)txt[i]*5/1023;    //ECG1 I wired them weong
+                            values[1][j] = (float)txt[i+1]*5/1023;  //ECG2
+                            values[2][j] = (float)-txt[i+2]*5/1023;  //ECG3
+                            if(j==0){
+                                values[3][j]= (float) (values[3][values[3].length-1]+txt[i+3]/1000000.0); //Convert to s
+                            }else{
+                                values[3][j]= (float) (values[3][j-1]+txt[i+3]/1000000.0);             //Convert to s
                             }
                         }
+
+                        for (int i=0;i<3;i++){
+                            values[i][0] = lastVal[i];
+                            values[i] = lowPassFilter(values[i]);
+                            lastVal[i] =  values[i][values.length - 1];
+
+                        }
+                        previewData(values);
+                    }
+                    if(msg.what == ConnectedThread.MESSAGE_MESSAGE){
+                        //Get battery lvl
+                        String txt = (String) msg.obj;
+                        toastMessage(txt);
                     }
                 }
             };
@@ -226,24 +236,15 @@ public class Ardconn extends AppCompatActivity {
         }
     }
 
-    private float[] seperateData(String str){
-        String[] valuesString = str.split("\\s*,\\s*"); //Make an array from each ,
-        float[] valuesFloat = new float[valuesString.length];
-        for(int i = 0;i < valuesString.length;i++)
-        {
-                valuesFloat[i] = Float.parseFloat(valuesString[i].trim());
+    private float[] lowPassFilter(float[] input) {
+        float[] output = new float[input.length];
+        float cutoffPoint = (float) 0.87;
+        output[0] = cutoffPoint * input[0];
+        for (int i = 1; i < input.length; i++) {
+            output[i] = output[i - 1] + cutoffPoint * (input[i] - output[i - 1]);
         }
-        return  valuesFloat;
+        return output;
     }
-
-    private float getVoltage(String str){
-        String[] valuesString = str.split("\\s*: \\s*"); //Make an array from each ,
-        float valuesFloat;
-        valuesFloat = Float.parseFloat(valuesString[1].trim());
-        Log.d("[Ardconn]","valuesFloat: "+valuesFloat);
-        return valuesFloat;
-    }
-
     private void setupChart(LineChart chart,int color){
         Log.d("[LedControl]","setupChart called");
         // no description text
@@ -291,7 +292,7 @@ public class Ardconn extends AppCompatActivity {
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    private void previewData(float[] data){
+    private void previewData(float[][] data){
         //Log.d("[LedControl]","previewCharts called");
         //Log.d("[previewData]","Previewing data[0]: "+data[0]);
         if(valuesECG1.size()==ARRAY_LIMIT){
@@ -300,19 +301,17 @@ public class Ardconn extends AppCompatActivity {
             valuesECG2.clear();
             valuesECG3.clear();
         }
-        long time_prev = time_ecg;
-        time_ecg= (System.currentTimeMillis() - start);
-        //Log.d("Ardconn","time_ecg " + time_ecg);
-        sum = sum+(time_ecg-time_prev);
-        num++;
-        if(num==1000){
-            Log.d("[Ardconn]","AverageTime: "+ sum/num);
-            num=0;
-            sum=0;
+
+        for (int i=0;i<data[0].length;i++){
+            //Log.d("[Ardconn]","ECG1: "+values[3][i]+", "+data[0][i]);
+            valuesECG1.add(new Entry(values[3][i],data[0][i]));
+            //Log.d("[Ardconn]","ECG2: "+times[i]+", "+data[1][i]);
+            valuesECG2.add(new Entry(values[3][i],data[1][i]));
+            //Log.d("[Ardconn]","ECG3: "+times[i]+", "+data[2][i]);
+            valuesECG3.add(new Entry(values[3][i],data[2][i]));
+            //Log.d("[Ardconn]"," ");
         }
-        valuesECG1.add(new Entry(time_ecg,data[0]));
-        valuesECG2.add(new Entry(time_ecg,data[1]));
-        valuesECG3.add(new Entry(time_ecg,data[2]));
+
 
 
         LineDataSet set1 = new LineDataSet(valuesECG1,"ECG1");
@@ -347,7 +346,7 @@ public class Ardconn extends AppCompatActivity {
         ((LineDataSet) data.getDataSetByIndex(0)).setDrawCircles(false);
 
         // add data
-        chart.setVisibleXRangeMaximum(4000);
+        chart.setVisibleXRangeMaximum(3);
         //chart.setVisibleYRangeMaximum(2,);
         if(scrolling){
             chart.moveViewToX(data.getXMax());
@@ -357,9 +356,8 @@ public class Ardconn extends AppCompatActivity {
         Legend l = chart.getLegend();
         l.setEnabled(false);
         //Refresh
-
-        chart.notifyDataSetChanged();
         chart.setData(data);
+        chart.notifyDataSetChanged();
         chart.invalidate();
     }
 }
